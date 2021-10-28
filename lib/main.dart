@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:band_names_flutter/screens/home_screen.dart';
-import 'package:band_names_flutter/screens/status_screen.dart';
 
 void main() => runApp(MyApp());
 
@@ -14,11 +13,9 @@ class MyApp extends StatelessWidget {
       providers: [ChangeNotifierProvider(create: (_) => SocketService())],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Material App',
-        initialRoute: 'status',
+        title: '/',
         routes: {
           '/': (_) => HomeScreen(),
-          'status': (_) => StatusScreen(),
         },
       ),
     );

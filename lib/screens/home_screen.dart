@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 
 import 'package:band_names_flutter/models/band_model.dart';
+import 'package:band_names_flutter/services/socket_service.dart';
+import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -11,21 +13,49 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<BandModel> bands = [
-    BandModel(id: '1', name: 'Limon', votes: 3),
-    BandModel(id: '2', name: 'Los recoditos', votes: 2),
-    BandModel(id: '3', name: 'La trakalosa', votes: 4),
-    BandModel(id: '4', name: 'Machos', votes: 1),
-    BandModel(id: '5', name: 'Calibre 50', votes: 5),
-  ];
+  List<BandModel> bands = [];
+
+  @override
+  void initState() {
+    final socketService = Provider.of<SocketService>(context, listen: false);
+    socketService.socket.on('activeBands', (payload) {
+      if (payload != null) {
+        setState(() {
+          bands = (payload as List).map((band) {
+            return BandModel.fromMap(band);
+          }).toList();
+        });
+      }
+    });
+
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    final socketService = Provider.of<SocketService>(context, listen: false);
+    socketService.socket.off('activeBands');
+
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final socketService = Provider.of<SocketService>(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Band Names', style: TextStyle(color: Colors.black87)),
         backgroundColor: Colors.white,
         elevation: 1,
+        actions: <Widget>[
+          Container(
+            margin: EdgeInsets.only(right: 16.0),
+            child: socketService.serverStatus == ServerStatus.Online
+                ? Icon(Icons.check_circle, color: Colors.green)
+                : Icon(Icons.offline_bolt, color: Colors.red),
+          ),
+        ],
       ),
       body: ListView.builder(
           itemCount: bands.length,
@@ -40,6 +70,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _bandTile(BandModel band) {
+    final socketService = Provider.of<SocketService>(context);
+
     return Dismissible(
       key: Key(band.id),
       direction: DismissDirection.endToStart,
@@ -65,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(fontSize: 20.0),
         ),
         onTap: () {
-          print(band.name);
+          socketService.socket.emit('voteBand', {'id': band.id});
         },
       ),
     );
