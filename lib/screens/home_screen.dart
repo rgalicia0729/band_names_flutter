@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 
 import 'package:band_names_flutter/models/band_model.dart';
 import 'package:band_names_flutter/services/socket_service.dart';
+import 'package:pie_chart/pie_chart.dart';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -18,17 +19,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     final socketService = Provider.of<SocketService>(context, listen: false);
-    socketService.socket.on('activeBands', (payload) {
-      if (payload != null) {
-        setState(() {
-          bands = (payload as List).map((band) {
-            return BandModel.fromMap(band);
-          }).toList();
-        });
-      }
-    });
+    socketService.socket.on('activeBands', _handleActiveBands);
 
     super.initState();
+  }
+
+  void _handleActiveBands(dynamic payload) {
+    if (payload != null) {
+      setState(() {
+        bands = (payload as List).map((band) {
+          return BandModel.fromMap(band);
+        }).toList();
+      });
+    }
   }
 
   @override
@@ -57,10 +60,18 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: ListView.builder(
-          itemCount: bands.length,
-          itemBuilder: (BuildContext context, int index) =>
-              _bandTile(bands[index])),
+      body: Column(
+        children: <Widget>[
+          if (bands.length > 0) _showGraph(),
+          Expanded(
+            child: ListView.builder(
+              itemCount: bands.length,
+              itemBuilder: (BuildContext context, int index) =>
+                  _bandTile(bands[index]),
+            ),
+          )
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         child: Icon(Icons.add),
         elevation: 1,
@@ -70,7 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _bandTile(BandModel band) {
-    final socketService = Provider.of<SocketService>(context);
+    final socketService = Provider.of<SocketService>(context, listen: false);
 
     return Dismissible(
       key: Key(band.id),
@@ -83,9 +94,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Text('Delete Band', style: TextStyle(color: Colors.white)),
         ),
       ),
-      onDismissed: (DismissDirection direction) {
-        print(band.id);
-      },
+      onDismissed: (_) =>
+          socketService.socket.emit('removeBand', {'id': band.id}),
       child: ListTile(
         leading: CircleAvatar(
           child: Text(band.name.substring(0, 2)),
@@ -96,9 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
           band.votes.toString(),
           style: TextStyle(fontSize: 20.0),
         ),
-        onTap: () {
-          socketService.socket.emit('voteBand', {'id': band.id});
-        },
+        onTap: () => socketService.socket.emit('voteBand', {'id': band.id}),
       ),
     );
   }
@@ -108,54 +116,67 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (Platform.isAndroid) {
       showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-                title: Text('New band name'),
-                content: TextField(
-                  controller: textController,
-                ),
-                actions: <Widget>[
-                  MaterialButton(
-                    child: Text('Add'),
-                    textColor: Colors.blue,
-                    onPressed: () => _addBandToList(textController.text),
-                  )
-                ],
-              ));
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('New band name'),
+          content: TextField(
+            controller: textController,
+          ),
+          actions: <Widget>[
+            MaterialButton(
+              child: Text('Add'),
+              textColor: Colors.blue,
+              onPressed: () => _addBandToList(textController.text),
+            )
+          ],
+        ),
+      );
     } else {
       showCupertinoDialog(
-          context: context,
-          builder: (_) => CupertinoAlertDialog(
-                title: Text('New band name'),
-                content: CupertinoTextField(
-                  controller: textController,
-                ),
-                actions: <Widget>[
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    child: Text('Add'),
-                    onPressed: () => _addBandToList(textController.text),
-                  ),
-                  CupertinoDialogAction(
-                    isDestructiveAction: true,
-                    child: Text('Dismiss'),
-                    onPressed: () => Navigator.pop(context),
-                  )
-                ],
-              ));
+        context: context,
+        builder: (_) => CupertinoAlertDialog(
+          title: Text('New band name'),
+          content: CupertinoTextField(
+            controller: textController,
+          ),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: Text('Add'),
+              onPressed: () => _addBandToList(textController.text),
+            ),
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              child: Text('Dismiss'),
+              onPressed: () => Navigator.pop(context),
+            )
+          ],
+        ),
+      );
     }
   }
 
   void _addBandToList(String name) {
-    print(name);
+    SocketService socketService =
+        Provider.of<SocketService>(context, listen: false);
 
     if (name.length > 1) {
-      setState(() {
-        this.bands.add(
-            BandModel(id: DateTime.now().toString(), name: name, votes: 0));
-      });
+      socketService.socket.emit('addBand', {'name': name});
     }
 
     Navigator.pop(context);
+  }
+
+  Widget _showGraph() {
+    Map<String, double> dataMap = new Map();
+    bands.forEach((band) {
+      dataMap.putIfAbsent(band.name, () => band.votes.toDouble());
+    });
+
+    return Container(
+      width: double.infinity,
+      height: 200.0,
+      child: PieChart(dataMap: dataMap),
+    );
   }
 }
